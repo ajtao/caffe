@@ -195,8 +195,7 @@ class Net {
   /// @brief Append a new bottom blob to the net.
   int AppendBottom(const NetParameter& param, const int layer_id,
                    const int bottom_id, set<string>* available_blobs,
-                   map<string, int>* blob_name_to_idx, 
-                   bool skip_propagate_down);
+                   map<string, int>* blob_name_to_idx);
   /// @brief Append a new parameter blob to the net.
   void AppendParam(const NetParameter& param, const int layer_id,
                    const int param_id);
