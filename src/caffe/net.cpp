@@ -105,14 +105,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // Figure out this layer's input and output
     for (int bottom_id = 0; bottom_id < layer_param.bottom_size();
          ++bottom_id) {
-      bool skip_propagate_down = false;
-      // Check if the backpropagation on bottom_id should be skipped
-      if (layer_param.skip_propagate_down_size() > 0)
-        skip_propagate_down = layer_param.skip_propagate_down(bottom_id);
       const int blob_id = AppendBottom(param, layer_id, bottom_id,
-//                                      &available_blobs, &blob_name_to_idx);
-                                       &available_blobs, &blob_name_to_idx,
-                                       skip_propagate_down);
+                                      &available_blobs, &blob_name_to_idx);
       // If a blob needs backward, this layer should provide it.
       need_backward |= blob_need_backward_[blob_id];
       //LOG(INFO) << "blob_need backward_[blob_id="<<blob_id<<"]="<< blob_need_backward_[blob_id];
