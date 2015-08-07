@@ -33,7 +33,7 @@ LIBRARY_NAME := $(PROJECT)$(LIBRARY_NAME_SUFFIX)
 LIB_BUILD_DIR := $(BUILD_DIR)/lib
 STATIC_NAME := $(LIB_BUILD_DIR)/lib$(LIBRARY_NAME).a
 DYNAMIC_VERSION_MAJOR 		:= 0
-DYNAMIC_VERSION_MINOR 		:= 12
+DYNAMIC_VERSION_MINOR 		:= 13
 DYNAMIC_VERSION_REVISION 	:= 1
 DYNAMIC_NAME_SHORT := lib$(LIBRARY_NAME).so
 DYNAMIC_SONAME_SHORT := $(DYNAMIC_NAME_SHORT).$(DYNAMIC_VERSION_MAJOR)
@@ -176,6 +176,7 @@ ifneq ($(CPU_ONLY), 1)
 	LIBRARY_DIRS += $(CUDA_LIB_DIR)
 	LIBRARIES := cudart cublas curand
 endif
+
 LIBRARIES += glog gflags protobuf leveldb snappy \
 	lmdb boost_system hdf5_hl hdf5 m \
 	opencv_core opencv_highgui opencv_imgproc
@@ -297,6 +298,12 @@ endif
 ifeq ($(USE_CUDNN), 1)
 	LIBRARIES += cudnn
 	COMMON_FLAGS += -DUSE_CUDNN
+endif
+
+# cuMEM integration
+ifeq ($(USE_CNMEM), 1)
+	LIBRARIES += cnmem
+	COMMON_FLAGS += -DUSE_CNMEM
 endif
 
 # CPU-only configuration

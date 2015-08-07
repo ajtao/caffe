@@ -83,13 +83,18 @@ GPUParams<Dtype>::GPUParams(shared_ptr<Solver<Dtype> > root_solver, int device)
 
   // Allocate device buffers
   CUDA_CHECK(cudaSetDevice(device));
-  CUDA_CHECK(cudaMalloc(&data_, size_ * sizeof(Dtype)));
+  buffer_device_ = device;
+  // CUDA_CHECK(cudaMalloc(&data_, size_ * sizeof(Dtype)));
+  MemoryHandler::mallocGPU(reinterpret_cast<void **>(&data_),
+                           size_ * sizeof(Dtype));
 
   // Copy blob values
   const vector<shared_ptr<Blob<Dtype> > >& net = root_solver->net()->params();
   apply_buffers(net, data_, size_, copy);
 
-  CUDA_CHECK(cudaMalloc(&diff_, size_ * sizeof(Dtype)));
+  // CUDA_CHECK(cudaMalloc(&diff_, size_ * sizeof(Dtype)));
+  MemoryHandler::mallocGPU(reinterpret_cast<void **>(&diff_),
+                           size_ * sizeof(Dtype));
   caffe_gpu_set(size_, Dtype(0), diff_);
 
   CUDA_CHECK(cudaSetDevice(initial_device));
@@ -101,8 +106,14 @@ GPUParams<Dtype>::GPUParams(shared_ptr<Solver<Dtype> > root_solver, int device)
 template<typename Dtype>
 GPUParams<Dtype>::~GPUParams() {
 #ifndef CPU_ONLY
-  CUDA_CHECK(cudaFree(data_));
-  CUDA_CHECK(cudaFree(diff_));
+  int initial_device;
+  cudaGetDevice(&initial_device);
+  cudaSetDevice(buffer_device_);
+  MemoryHandler::freeGPU(data_);
+  MemoryHandler::freeGPU(diff_);
+  data_ = NULL;
+  diff_ = NULL;
+  cudaSetDevice(initial_device);
 #endif
 }
 
@@ -119,8 +130,11 @@ void DevicePair::compute(const vector<int> devices, vector<DevicePair>* pairs) {
 #ifndef CPU_ONLY
   vector<int> remaining(devices);
 
-  // Group GPUs by board - some boards can have more than 2 ASICs
-  for (int d = 0; d < remaining.size(); ++d) {
+  // Depth for reduction tree
+  int remaining_depth = static_cast<int>(ceil(log2(remaining.size())));
+
+  // Group GPUs by board
+  for (int d = 0; d < remaining_depth; ++d) {
     for (int i = 0; i < remaining.size(); ++i) {
       for (int j = i + 1; j < remaining.size(); ++j) {
         cudaDeviceProp a, b;
@@ -144,8 +158,9 @@ void DevicePair::compute(const vector<int> devices, vector<DevicePair>* pairs) {
   }
   DLOG(INFO) << "GPUs paired by boards, remaining: " << s.str();
 
-  // Group by P2P accessibility - P2P group can be larger than 4 boards
-  for (int d = 0; d < remaining.size(); ++d) {
+  // Group by P2P accessibility
+  remaining_depth = ceil(log2(remaining.size()));
+  for (int d = 0; d < remaining_depth; ++d) {
     for (int i = 0; i < remaining.size(); ++i) {
       for (int j = i + 1; j < remaining.size(); ++j) {
         int access;
@@ -169,18 +184,19 @@ void DevicePair::compute(const vector<int> devices, vector<DevicePair>* pairs) {
   DLOG(INFO) << "GPUs paired by P2P access, remaining: " << s.str();
 
   // Group remaining
-  for (int d = 0; d < remaining.size(); ++d) {  // try to pair everyone
+  remaining_depth = ceil(log2(remaining.size()));
+  for (int d = 0; d < remaining_depth; ++d) {
     for (int i = 0; i < remaining.size(); ++i) {
-      for (int j = i + 1; j < remaining.size(); ++j) {
-          pairs->push_back(DevicePair(remaining[i], remaining[j]));
+          pairs->push_back(DevicePair(remaining[i], remaining[i+1]));
           DLOG(INFO) << "Remaining pair: " << remaining[i]
-                     << ":" << remaining[j];
-          remaining.erase(remaining.begin() + j);
-          break;
-      }
+                     << ":" << remaining[i+1];
+          remaining.erase(remaining.begin() + i+1);
     }
   }
+
+  // Should only be the parent node remaining
   CHECK_EQ(remaining.size(), 1);
+
   pairs->insert(pairs->begin(), DevicePair(-1, remaining[0]));
 
   CHECK(pairs->size() == devices.size());
@@ -234,7 +250,8 @@ P2PSync<Dtype>::P2PSync(shared_ptr<Solver<Dtype> > root_solver,
     }
     // Allocate receiving buffer on parent
     CUDA_CHECK(cudaSetDevice(peer));
-    CUDA_CHECK(cudaMalloc(&parent_grads_, size_ * sizeof(Dtype)));
+    MemoryHandler::mallocGPU(reinterpret_cast<void **>(&parent_grads_),
+                     size_ * sizeof(Dtype));
     CUDA_CHECK(cudaSetDevice(self));
   }
 
@@ -253,8 +270,11 @@ P2PSync<Dtype>::~P2PSync() {
   CUDA_CHECK(cudaSetDevice(self));
 
   if (parent_) {
-    CUDA_CHECK(cudaFree(parent_grads_));
     const int peer = parent_->solver_->param().device_id();
+    cudaSetDevice(peer);
+    MemoryHandler::freeGPU(parent_grads_);
+    parent_grads_ = NULL;
+    cudaSetDevice(self);
     int access;
     CUDA_CHECK(cudaDeviceCanAccessPeer(&access, self, peer));
     if (access) {
@@ -305,7 +325,7 @@ void P2PSync<Dtype>::on_start(Timer* timer, ostringstream* timing) {
   if (children_.size()) {
     timer->Start();
   }
-  for (int i = 0; i < children_.size(); ++i) {
+  for (int i = children_.size() - 1; i >= 0; i--) {
     Dtype* src = data_;
     Dtype* dst = children_[i]->data_;
 
@@ -319,11 +339,7 @@ void P2PSync<Dtype>::on_start(Timer* timer, ostringstream* timing) {
 
     CUDA_CHECK(cudaMemcpyAsync(dst, src, size_ * sizeof(Dtype),  //
         cudaMemcpyDeviceToDevice, cudaStreamDefault));
-  }
-  if (children_.size()) {
     CUDA_CHECK(cudaStreamSynchronize(cudaStreamDefault));
-  }
-  for (int i = 0; i < children_.size(); ++i) {
     children_[i]->queue_.push(this);
   }
   if (children_.size()) {
