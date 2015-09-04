@@ -25,7 +25,7 @@ namespace caffe {
 template <typename Dtype>
 NVDataLayer<Dtype>::NVDataLayer(const LayerParameter& param)
   : BasePrefetchingDataLayer<Dtype>(param),
-    reader_(param) {
+    reader_(param, true) {
 }
 
 template <typename Dtype>
@@ -34,7 +34,7 @@ NVDataLayer<Dtype>::~NVDataLayer() {
 }
 
 template <typename Dtype>
-void NVDataLayer<Dtype>::NVDataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+void NVDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   // Read a data point, and use it to initialize the top blob.
   Datum& datum = *(reader_.full().peek());
@@ -68,8 +68,7 @@ void NVDataLayer<Dtype>::NVDataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->prefetch_[i].data_.Reshape(batch_size, datum.channels(),
           height, width);
     }
-    this->transformed_data_.Reshape(1, datum.channels(),
-        height, width);
+    this->transformed_data_.Reshape(1, 3, height, width);
   }
   LOG(INFO) << "output data size: " << top[0]->num() << ","
       << top[0]->channels() << "," << top[0]->height() << ","
@@ -154,9 +153,10 @@ void NVDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
     // Apply data transformations (mirror, scale, crop...)
     timer.Start();
-    int offset = batch->data_.offset(item_id);
-    this->transformed_data_.set_cpu_data(top_data + offset);
-    this->transformed_label_.set_cpu_data(top_label + offset);
+    const int offset_data = batch->data_.offset(item_id);
+    const int offset_label = batch->label_.offset(item_id);
+    this->transformed_data_.set_cpu_data(top_data + offset_data);
+    this->transformed_label_.set_cpu_data(top_label + offset_label);
     if (datum.encoded()) {
       this->data_transformer_->Transform(cv_img, &(this->transformed_data_));
     } else {

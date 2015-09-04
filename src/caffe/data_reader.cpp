@@ -15,23 +15,24 @@ using boost::weak_ptr;
 map<const string, weak_ptr<DataReader::Body> > DataReader::bodies_;
 static boost::mutex bodies_mutex_;
 
-DataReader::DataReader(const LayerParameter& param)
-    : queue_pair_(new QueuePair(  //
+DataReader::DataReader(const LayerParameter& param, bool is_nv_data)
+    : queue_pair_(new QueuePair(is_nv_data ?
+		param.nvdata_param().prefetch() * param.nvdata_param().batch_size() :
         param.data_param().prefetch() * param.data_param().batch_size())) {
   // Get or create a body
   boost::mutex::scoped_lock lock(bodies_mutex_);
-  string key = source_key(param);
+  string key = source_key(param, is_nv_data);
   weak_ptr<Body>& weak = bodies_[key];
   body_ = weak.lock();
   if (!body_) {
-    body_.reset(new Body(param));
+    body_.reset(new Body(param, is_nv_data));
     bodies_[key] = weak_ptr<Body>(body_);
   }
   body_->new_queue_pairs_.push(queue_pair_);
 }
 
 DataReader::~DataReader() {
-  string key = source_key(body_->param_);
+  string key = source_key(body_->param_, body_->is_nv_data_);
   body_.reset();
   boost::mutex::scoped_lock lock(bodies_mutex_);
   if (bodies_[key].expired()) {
@@ -60,8 +61,9 @@ DataReader::QueuePair::~QueuePair() {
 
 //
 
-DataReader::Body::Body(const LayerParameter& param)
-    : param_(param),
+DataReader::Body::Body(const LayerParameter& param, bool is_nv_data)
+    : is_nv_data_(is_nv_data),
+      param_(param),
       new_queue_pairs_() {
   StartInternalThread();
 }
@@ -71,8 +73,9 @@ DataReader::Body::~Body() {
 }
 
 void DataReader::Body::InternalThreadEntry() {
-  shared_ptr<db::DB> db(db::GetDB(param_.data_param().backend()));
-  db->Open(param_.data_param().source(), db::READ);
+  shared_ptr<db::DB> db(db::GetDB(is_nv_data_ ?
+	(DataParameter::DB) param_.nvdata_param().backend() : param_.data_param().backend()));
+  db->Open(is_nv_data_ ? param_.nvdata_param().source() : param_.data_param().source(), db::READ);
   shared_ptr<db::Cursor> cursor(db->NewCursor());
   vector<shared_ptr<QueuePair> > qps;
   try {

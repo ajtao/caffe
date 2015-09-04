@@ -22,7 +22,7 @@ namespace caffe {
  */
 class DataReader {
  public:
-  explicit DataReader(const LayerParameter& param);
+  explicit DataReader(const LayerParameter& param, bool is_nv_data_);
   ~DataReader();
 
   inline BlockingQueue<Datum*>& free() const {
@@ -48,13 +48,14 @@ class DataReader {
   // A single body is created per source
   class Body : public InternalThread {
    public:
-    explicit Body(const LayerParameter& param);
+    explicit Body(const LayerParameter& param, bool is_nv_data);
     virtual ~Body();
 
    protected:
     void InternalThreadEntry();
     void read_one(db::Cursor* cursor, QueuePair* qp);
 
+    const bool is_nv_data_;
     const LayerParameter param_;
     BlockingQueue<shared_ptr<QueuePair> > new_queue_pairs_;
 
@@ -65,8 +66,9 @@ class DataReader {
 
   // A source is uniquely identified by its layer name + path, in case
   // the same database is read from two different locations in the net.
-  static inline string source_key(const LayerParameter& param) {
-    return param.name() + ":" + param.data_param().source();
+  static inline string source_key(const LayerParameter& param, bool is_nv_data) {
+    return param.name() + ":" +
+      (is_nv_data ? param.nvdata_param().source() : param.data_param().source());
   }
 
   const shared_ptr<QueuePair> queue_pair_;

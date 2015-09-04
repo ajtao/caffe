@@ -111,7 +111,7 @@ class NVDataLayer : public BasePrefetchingDataLayer<Dtype> {
  public:
   explicit NVDataLayer(const LayerParameter& param);
   virtual ~NVDataLayer();
-  virtual void NVDataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
   virtual inline const char* type() const { return "NVData"; }
