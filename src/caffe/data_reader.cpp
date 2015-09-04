@@ -17,7 +17,7 @@ static boost::mutex bodies_mutex_;
 
 DataReader::DataReader(const LayerParameter& param, bool is_nv_data)
     : queue_pair_(new QueuePair(is_nv_data ?
-		param.nvdata_param().prefetch() * param.nvdata_param().batch_size() :
+        param.nvdata_param().prefetch() * param.nvdata_param().batch_size() :
         param.data_param().prefetch() * param.data_param().batch_size())) {
   // Get or create a body
   boost::mutex::scoped_lock lock(bodies_mutex_);
