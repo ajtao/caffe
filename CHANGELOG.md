@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 9/16/2015
+### Changed
+- CMake fixes (https://github.com/ajtao/caffe/pull/2)
+- NVData layer fixes
+
 ## 1.0.0 (Initial) - 8/13/2015
 ### Added
 - This changelog
