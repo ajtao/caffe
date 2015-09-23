@@ -15,6 +15,11 @@ using namespace cv;
 
 namespace caffe {
 
+template<typename Dtype>
+void DecodeFloats(const string& data, size_t idx, Dtype* pf, size_t len) {
+  memcpy(pf, const_cast<char*>(&data[idx]), len * sizeof(Dtype));
+}
+
 template<typename Dtype> DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param, Phase phase) : param_(param), phase_(phase) {
   // check if we want to use mean_file
   if (param_.has_mean_file()) {
@@ -254,27 +259,37 @@ template<typename Dtype> void DataTransformer<Dtype>::Transform_nv(const Datum& 
       }
     }
   }
-  
+
   //and a list of bbox
-  int numOfBbox;
-  if (has_uint8)
-    numOfBbox = static_cast<Dtype>(static_cast<uint8_t>(data[3*offset]));
-  else
-    numOfBbox = datum.float_data(3*offset);
-  //LOG(INFO) << "There are " << numOfBbox << " bounding boxes in image " << cnt;
-  vector<vector<Dtype> > bboxlist;
-  for(int i = 0; i < numOfBbox; i++){
+  float bboxDims[2];
+  int offset3 = 3 * offset;
+  DecodeFloats(data, offset3, bboxDims, 2);
+  size_t numOfBbox = static_cast<size_t>(bboxDims[0]);
+  size_t bboxLen = static_cast<size_t>(bboxDims[1]);
+  offset3 += 2 * sizeof(float);
+
+  vector<vector<Dtype> > bboxlist(numOfBbox);
+  for(int i = 0; i < numOfBbox; ++i) {
+    //fix: now we store bbox as a separate float array (former datum_joint)
+    //
+    //        gen_grid_real currently stores 6 values:
+    //
+    //        abox[4] = 0 #class number
+    //        abox[0] = bbox.xmin
+    //        abox[1] = bbox.ymin
+    //        abox[2] = bbox.xmax - bbox.xmin
+    //        abox[3] = bbox.ymax - bbox.ymin
+    //        if args.dataset == 'Audi':
+    //            abox[5] = bbox.ymax
+    //        else:
+    //            abox[5] = bbox.locz
+    //
+
+    // TODO: verify where we use the last two
+
     vector<Dtype> bbox(4);
-    for(int b = 0; b < 4; b++){
-      dindex = 3*offset + (i+1)*img.cols + b;
-      if (has_uint8)
-        d_element = static_cast<Dtype>(static_cast<uint8_t>(data[dindex]));
-      else
-        d_element = datum.float_data(dindex);
-      bbox[b] = d_element;
-    }
-    //LOG(INFO) << bbox[0] << " " << bbox[1] << " " << bbox[2] << " " << bbox[3];
-    bboxlist.push_back(bbox);
+    DecodeFloats(data, offset3 + i * bboxLen * sizeof(float), &bbox.front(), bbox.size());
+    bboxlist[i] = bbox;
   }
   
   //TODO: start transform, different kinds
@@ -330,7 +345,7 @@ template<typename Dtype> void DataTransformer<Dtype>::Transform_nv(const Datum& 
 }
 
 template<typename Dtype>
-float DataTransformer<Dtype>::augmentation_scale(Mat& img_src, Mat& img_temp, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
+float DataTransformer<Dtype>::augmentation_scale(Mat& img_src, Mat& img_temp, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
   float dice = static_cast <float> (rand()) / static_cast <float> (RAND_MAX); //[0,1]
   float scale;
   //float scale = (param_.scale_max() - param_.scale_min()) * dice + param_.scale_min(); //linear shear into [scale_min, scale_max]
@@ -359,7 +374,7 @@ float DataTransformer<Dtype>::augmentation_scale(Mat& img_src, Mat& img_temp, ve
 }
 
 template<typename Dtype>
-Size DataTransformer<Dtype>::augmentation_crop(Mat& img_temp, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
+Size DataTransformer<Dtype>::augmentation_crop(Mat& img_temp, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
   float dice_x = static_cast <float> (rand()) / static_cast <float> (RAND_MAX); //[0,1]
   float dice_y = static_cast <float> (rand()) / static_cast <float> (RAND_MAX); //[0,1]
   int crop_x = param_.crop_size_x();
@@ -403,7 +418,7 @@ Size DataTransformer<Dtype>::augmentation_crop(Mat& img_temp, Mat& img_aug, vect
 
 
 template<typename Dtype>
-bool DataTransformer<Dtype>::augmentation_flip(Mat& img_src, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
+bool DataTransformer<Dtype>::augmentation_flip(Mat& img_src, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
 
   float dice = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   bool doflip = (dice <= param_.flip_prob());
@@ -429,7 +444,7 @@ bool DataTransformer<Dtype>::augmentation_flip(Mat& img_src, Mat& img_aug, vecto
 }
 
 template<typename Dtype>
-float DataTransformer<Dtype>::augmentation_rotate(Mat& img_src, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
+float DataTransformer<Dtype>::augmentation_rotate(Mat& img_src, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >& bboxlist_aug) {
   
   float dice = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
   float degree = (dice - 0.5) * 2 * param_.max_rotate_degree();

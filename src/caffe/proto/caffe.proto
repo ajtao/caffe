@@ -527,8 +527,10 @@ message NVDataParameter {
     LEVELDB = 0;
     LMDB = 1;
   }
-  // Specify the data source.
+  // Specify the image data source.
   optional string source = 1;
+  // Specify the label data source.
+  optional string lbl_source = 11;
   // Specify the batch size.
   optional uint32 batch_size = 4;
   // The rand_skip variable is for the data layer to skip a few data points

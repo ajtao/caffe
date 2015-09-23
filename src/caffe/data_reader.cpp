@@ -76,6 +76,15 @@ void DataReader::Body::InternalThreadEntry() {
   shared_ptr<db::DB> db(db::GetDB(is_nv_data_ ?
 	(DataParameter::DB) param_.nvdata_param().backend() : param_.data_param().backend()));
   db->Open(is_nv_data_ ? param_.nvdata_param().source() : param_.data_param().source(), db::READ);
+
+  shared_ptr<db::DB> dbl;
+  shared_ptr<db::Transaction> dblt;
+  if (is_nv_data_) {
+    dbl.reset(db::GetDB((DataParameter::DB) param_.nvdata_param().backend()));
+    dbl->Open(param_.nvdata_param().lbl_source(), db::WRITE);
+    dblt.reset(dbl->NewTransaction());
+  }
+
   shared_ptr<db::Cursor> cursor(db->NewCursor());
   vector<shared_ptr<QueuePair> > qps;
   try {
@@ -86,13 +95,13 @@ void DataReader::Body::InternalThreadEntry() {
     // so read one item, then wait for the next solver.
     for (int i = 0; i < solver_count; ++i) {
       shared_ptr<QueuePair> qp(new_queue_pairs_.pop());
-      read_one(cursor.get(), qp.get());
+      read_one(cursor.get(), dblt.get(), qp.get());
       qps.push_back(qp);
     }
     // Main loop
     while (!must_stop()) {
       for (int i = 0; i < solver_count; ++i) {
-        read_one(cursor.get(), qps[i].get());
+        read_one(cursor.get(), dblt.get(), qps[i].get());
       }
       // Check no additional readers have been created. This can happen if
       // more than one net is trained at a time per process, whether single
@@ -105,10 +114,20 @@ void DataReader::Body::InternalThreadEntry() {
   }
 }
 
-void DataReader::Body::read_one(db::Cursor* cursor, QueuePair* qp) {
+void DataReader::Body::read_one(db::Cursor* cursor, db::Transaction* dblt, QueuePair* qp) {
   Datum* datum = qp->free_.pop();
   // TODO deserialize in-place instead of copy?
   datum->ParseFromString(cursor->value());
+  if (dblt != NULL) {
+    string labels;
+    CHECK_EQ(dblt->Get(cursor->key(), labels), 0);
+    Datum labelDatum;
+    labelDatum.ParseFromString(labels);
+//    datum->MergeFrom(labelDatum);
+    datum->set_channels(datum->channels() + labelDatum.channels());
+    datum->mutable_float_data()->MergeFrom(labelDatum.float_data());
+    datum->mutable_data()->append(labelDatum.data());
+  }
   qp->full_.push(datum);
 
   // go to the next iter

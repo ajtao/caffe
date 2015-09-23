@@ -48,12 +48,12 @@ class DataReader {
   // A single body is created per source
   class Body : public InternalThread {
    public:
-    explicit Body(const LayerParameter& param, bool is_nv_data);
+    Body(const LayerParameter& param, bool is_nv_data);
     virtual ~Body();
 
    protected:
     void InternalThreadEntry();
-    void read_one(db::Cursor* cursor, QueuePair* qp);
+    void read_one(db::Cursor* cursor, db::Transaction* dblt, QueuePair* qp);
 
     const bool is_nv_data_;
     const LayerParameter param_;

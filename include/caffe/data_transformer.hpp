@@ -101,10 +101,10 @@ class DataTransformer {
   void generateLabelMap(Dtype*, Mat img_aug, vector<vector<Dtype> > bboxlist_aug, int cnt);
   void visualize_bboxlist(Mat& img, Mat& img_aug, vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >& bboxlist_aug, Dtype* transformed_label, AugmentSelection, int cnt);
 
-  bool augmentation_flip(Mat& img, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >&);
-  float augmentation_rotate(Mat& img_src, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >&);
-  float augmentation_scale(Mat& img, Mat& img_temp, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >&);
-  Size augmentation_crop(Mat& img_temp, Mat& img_aug, vector<vector<Dtype> > bboxlist, vector<vector<Dtype> >&);
+  bool augmentation_flip(Mat& img, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >&);
+  float augmentation_rotate(Mat& img_src, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >&);
+  float augmentation_scale(Mat& img, Mat& img_temp, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >&);
+  Size augmentation_crop(Mat& img_temp, Mat& img_aug, const vector<vector<Dtype> >& bboxlist, vector<vector<Dtype> >&);
 
   AugmentSelection as;
 

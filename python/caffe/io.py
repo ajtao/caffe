@@ -77,6 +77,18 @@ def array_to_datum(arr, label=0):
     return datum
 
 
+def bbox_to_datum(arr, label=0):
+    """Converts a 1-dimensional bbox array to datum.
+    """
+    if arr.ndim != 1:
+        raise ValueError('Incorrect bbox array shape.')
+    datum = caffe_pb2.Datum()
+    datum.channels = 1
+    datum.data = arr.tostring()
+    datum.label = label
+    return datum
+
+
 def datum_to_array(datum):
     """Converts a datum to an array. Note that the label is not returned,
     as one can easily get it by calling datum.label.

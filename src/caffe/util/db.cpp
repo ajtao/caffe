@@ -20,6 +20,13 @@ void LevelDB::Open(const string& source, Mode mode) {
   LOG(INFO) << "Opened leveldb " << source;
 }
 
+int LevelDBTransaction::Get(const string& key, string& value) {
+  leveldb::ReadOptions options;
+  leveldb::Slice slice(key);
+  leveldb::Status status = db_->Get(options, slice, &value);
+  return status.ok() ? 0 : 1;
+}
+
 void LMDB::Open(const string& source, Mode mode) {
   MDB_CHECK(mdb_env_create(&mdb_env_));
   MDB_CHECK(mdb_env_set_mapsize(mdb_env_, LMDB_MAP_SIZE));
@@ -57,6 +64,17 @@ void LMDBTransaction::Put(const string& key, const string& value) {
   mdb_value.mv_data = const_cast<char*>(value.data());
   mdb_value.mv_size = value.size();
   MDB_CHECK(mdb_put(mdb_txn_, *mdb_dbi_, &mdb_key, &mdb_value, 0));
+}
+
+int LMDBTransaction::Get(const string& key, string& value) {
+  MDB_val mdb_key, mdb_value;
+  mdb_key.mv_data = const_cast<char*>(key.data());
+  mdb_key.mv_size = key.size();
+  int retval = mdb_get(mdb_txn_, *mdb_dbi_, &mdb_key, &mdb_value);
+  if (retval == 0) {
+    value.assign(static_cast<char*>(mdb_value.mv_data), mdb_value.mv_size);
+  }
+  return retval;
 }
 
 DB* GetDB(DataParameter::DB backend) {
