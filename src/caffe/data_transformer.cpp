@@ -283,11 +283,12 @@ template<typename Dtype> void DataTransformer<Dtype>::Transform_nv(const Datum& 
     //            abox[5] = bbox.ymax
     //        else:
     //            abox[5] = bbox.locz
+    //        abox[6] = bbox.scenario() # 1665732
     //
 
-    // TODO: verify where we use the last two
+    // TODO: verify where we use the last three
 
-    vector<Dtype> bbox(4);
+    vector<Dtype> bbox(bboxLen);
     DecodeFloats(data, offset3 + i * bboxLen * sizeof(float), &bbox.front(), bbox.size());
     bboxlist[i] = bbox;
   }
